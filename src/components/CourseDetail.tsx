@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   ArrowLeft, Star, Users, Clock, BookOpen, Award,
-  CheckCircle, Play, Lock, ChevronDown, ChevronUp
+  CheckCircle, Play, Lock, Loader
 } from 'lucide-react';
 import { CatalogCourse } from '../utils/catalogData';
 
@@ -21,9 +21,17 @@ const CourseDetail: React.FC<CourseDetailProps> = ({
   onStartLearning
 }) => {
   const [expandedSection, setExpandedSection] = useState<string>('overview');
+  const [isEnrolling, setIsEnrolling] = useState(false);
 
-  const toggleSection = (section: string) => {
-    setExpandedSection(expandedSection === section ? '' : section);
+  const handleEnrollClick = async () => {
+    setIsEnrolling(true);
+    try {
+      await onEnroll(course);
+    } catch (error) {
+      console.error('Error enrolling:', error);
+    } finally {
+      setIsEnrolling(false);
+    }
   };
 
   return (
@@ -255,12 +263,37 @@ const CourseDetail: React.FC<CourseDetailProps> = ({
                   </div>
                 </div>
               ) : (
-                <button
-                  onClick={() => onEnroll(course)}
-                  className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 px-6 rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all"
-                >
-                  Enroll Now - Free
-                </button>
+                <div className="space-y-3">
+                  <button
+                    onClick={handleEnrollClick}
+                    disabled={isEnrolling}
+                    className={`w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 px-6 rounded-lg font-semibold transition-all flex items-center justify-center space-x-2 ${
+                      isEnrolling
+                        ? 'opacity-75 cursor-not-allowed'
+                        : 'hover:from-blue-700 hover:to-purple-700'
+                    }`}
+                  >
+                    {isEnrolling ? (
+                      <>
+                        <Loader className="h-5 w-5 animate-spin" />
+                        <span>Enrolling...</span>
+                      </>
+                    ) : (
+                      <span>Enroll Now - Free</span>
+                    )}
+                  </button>
+                  {isEnrolling && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <div className="flex items-center space-x-3">
+                        <Loader className="h-5 w-5 text-blue-600 animate-spin" />
+                        <div>
+                          <p className="font-semibold text-blue-900">Generating your course...</p>
+                          <p className="text-sm text-blue-700">AI is creating lessons, quizzes, and study materials</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
 
               <p className="text-xs text-gray-500 text-center mt-4">

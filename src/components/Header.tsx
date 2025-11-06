@@ -19,6 +19,7 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentView, user, onAuthCl
     { id: 'catalog', label: 'Browse Courses' },
     { id: 'dashboard', label: 'Dashboard' },
     { id: 'create', label: 'Create Course' },
+    { id: 'analytics', label: 'Analytics' },
     { id: 'chatbot', label: 'AI Tutor' },
   ];
 

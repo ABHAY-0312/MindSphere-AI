@@ -5,7 +5,40 @@ const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 const YOUTUBE_API_BASE_URL = 'https://www.googleapis.com/youtube/v3';
 
 /**
+ * Get video duration from YouTube
+ * @param {string} videoId - The YouTube video ID
+ * @returns {Promise<number>} Duration in seconds
+ */
+const getVideoDuration = async (videoId) => {
+  try {
+    const params = new URLSearchParams({
+      part: 'contentDetails',
+      id: videoId,
+      key: YOUTUBE_API_KEY
+    });
+
+    const response = await fetch(`${YOUTUBE_API_BASE_URL}/videos?${params}`);
+    const data = await response.json();
+
+    if (data.items && data.items.length > 0) {
+      const duration = data.items[0].contentDetails.duration;
+      // Convert ISO 8601 duration to seconds
+      const match = duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
+      const hours = (parseInt(match[1]) || 0) * 3600;
+      const minutes = (parseInt(match[2]) || 0) * 60;
+      const seconds = parseInt(match[3]) || 0;
+      return hours + minutes + seconds;
+    }
+    return 0;
+  } catch (error) {
+    console.error('❌ Error getting video duration:', error.message);
+    return 0;
+  }
+};
+
+/**
  * Search for YouTube videos related to a topic
+ * Filters out Shorts (videos under 60 seconds) to show only lectures
  * @param {string} topic - The topic to search for
  * @param {number} maxResults - Maximum number of results to return
  * @returns {Promise<Array>} Array of video objects with id, title, and thumbnail
@@ -21,10 +54,11 @@ export const searchYoutubeVideos = async (topic, maxResults = 3) => {
     
     const searchParams = new URLSearchParams({
       part: 'snippet',
-      q: `${topic} tutorial`,
+      q: `${topic} tutorial lecture`,
       type: 'video',
-      maxResults: maxResults,
+      maxResults: maxResults * 2, // Get more results to filter out shorts
       order: 'relevance',
+      videoLicense: 'creativeCommon', // Optional: prefer open-licensed content
       key: YOUTUBE_API_KEY
     });
 
@@ -42,17 +76,35 @@ export const searchYoutubeVideos = async (topic, maxResults = 3) => {
       return [];
     }
 
-    // Extract video IDs and get details
-    const videos = data.items.map(item => ({
-      id: item.id.videoId,
-      title: item.snippet.title,
-      description: item.snippet.description,
-      thumbnail: item.snippet.thumbnails.medium.url,
-      channelTitle: item.snippet.channelTitle,
-      publishedAt: item.snippet.publishedAt
-    }));
+    // Filter out shorts by checking duration (minimum 5 minutes for lectures)
+    const videosWithDuration = [];
+    for (const item of data.items) {
+      if (!item.id.videoId) continue;
+      
+      const duration = await getVideoDuration(item.id.videoId);
+      
+      // Only include videos that are at least 5 minutes long (300 seconds)
+      // This filters out YouTube Shorts (typically under 60 seconds)
+      if (duration >= 300) {
+        videosWithDuration.push({
+          id: item.id.videoId,
+          title: item.snippet.title,
+          description: item.snippet.description,
+          thumbnail: item.snippet.thumbnails.medium.url,
+          channelTitle: item.snippet.channelTitle,
+          publishedAt: item.snippet.publishedAt,
+          duration: duration
+        });
+        
+        if (videosWithDuration.length >= maxResults) break;
+      }
+    }
 
-    return videos;
+    if (videosWithDuration.length === 0) {
+      console.warn(`⚠️ No full-length videos found for: "${topic}" (only shorts)`);
+    }
+
+    return videosWithDuration;
   } catch (error) {
     console.error('❌ Error searching YouTube:', error.message);
     return [];

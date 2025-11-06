@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import Header from './components/Header';
 import Hero from './components/Hero';
 import Dashboard from './components/Dashboard';
@@ -8,6 +8,7 @@ import ChatBot from './components/ChatBot';
 import AuthModal from './components/AuthModal';
 import CourseCatalog from './components/CourseCatalog';
 import CourseDetail from './components/CourseDetail';
+import AnalyticsDashboard from './components/AnalyticsDashboard';
 import { Course } from './types/course';
 import { User } from './types/auth';
 import { CatalogCourse } from './utils/catalogData';
@@ -34,7 +35,7 @@ function App() {
             id: course._id,
             createdAt: new Date(course.createdAt),
             lastAccessed: course.lastAccessed ? new Date(course.lastAccessed) : undefined
-          })));
+          } as unknown as Course)));
           
           // Get all catalog courses to map titles back to IDs
           const catalogData = await catalogApi.getAll();
@@ -113,7 +114,7 @@ function App() {
         id: course._id,
         createdAt: new Date(course.createdAt),
         lastAccessed: course.lastAccessed ? new Date(course.lastAccessed) : undefined
-      })));
+      } as unknown as Course)));
       
       // Get all catalog courses to map titles back to IDs
       const catalogData = await catalogApi.getAll();
@@ -190,7 +191,7 @@ function App() {
         id: enrolledCourse._id,
         createdAt: new Date(enrolledCourse.createdAt),
         lastAccessed: enrolledCourse.lastAccessed ? new Date(enrolledCourse.lastAccessed) : new Date()
-      };
+      } as unknown as Course;
 
       setCourses(prev => [courseWithId, ...prev]);
       setEnrolledCourseIds(prev => [...prev, catalogCourse.id]);
@@ -262,6 +263,8 @@ function App() {
         );
       case 'chatbot':
         return <ChatBot courses={courses} />;
+      case 'analytics':
+        return <AnalyticsDashboard />;
       default:
         return <Hero onGetStarted={handleGetStarted} />;
     }

@@ -4,10 +4,10 @@ import { ChatMessage } from '../types/course';
 import { chatApi } from '../lib/api';
 
 interface ChatBotProps {
-  courses: unknown[];
+  courses?: unknown[];
 }
 
-const ChatBot: React.FC<ChatBotProps> = ({ courses }) => {
+const ChatBot: React.FC<ChatBotProps> = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
@@ -63,8 +63,6 @@ const ChatBot: React.FC<ChatBotProps> = ({ courses }) => {
       
       setMessages(prev => [...prev, aiResponse]);
     } catch (error) {
-      console.error('Error getting AI response:', error);
-      
       const errorResponse: ChatMessage = {
         id: (Date.now() + 1).toString(),
         type: 'ai',
@@ -103,7 +101,6 @@ const ChatBot: React.FC<ChatBotProps> = ({ courses }) => {
         </div>
 
         <div className="bg-white rounded-2xl shadow-xl border border-gray-100 h-[600px] flex flex-col">
-          {/* Chat Messages */}
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
             {messages.map((message) => (
               <div
@@ -161,7 +158,6 @@ const ChatBot: React.FC<ChatBotProps> = ({ courses }) => {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Suggested Questions */}
           {messages.length === 1 && (
             <div className="px-6 py-4 border-t border-gray-200">
               <div className="flex items-center mb-3">
@@ -182,7 +178,6 @@ const ChatBot: React.FC<ChatBotProps> = ({ courses }) => {
             </div>
           )}
 
-          {/* Input Area */}
           <div className="p-6 border-t border-gray-200">
             <div className="flex items-end space-x-4">
               <div className="flex-1">

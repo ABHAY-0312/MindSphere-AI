@@ -351,9 +351,13 @@ router.post('/', async (req, res) => {
     const course = new Course(courseData);
     await course.save();
     
-    // Add course to user's courses
+    // Add course to user's courses AND enrolledCourses (for analytics)
     await User.findByIdAndUpdate(req.userId, {
-      $push: { courses: course._id }
+      $push: { 
+        courses: course._id,
+        enrolledCourses: course._id
+      },
+      lastActivityDate: new Date()
     });
     
     res.status(201).json(course);
@@ -396,6 +400,11 @@ router.patch('/:id', async (req, res) => {
     
     course.lastAccessed = new Date();
     await course.save();
+    
+    // Update user's lastActivityDate for analytics/streak tracking
+    await User.findByIdAndUpdate(req.userId, {
+      lastActivityDate: new Date()
+    });
     
     res.json(course);
   } catch (error) {

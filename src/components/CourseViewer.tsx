@@ -111,7 +111,6 @@ const CourseViewer: React.FC<CourseViewerProps> = ({ course, onBack, onUpdateCou
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
         <div className="mb-8">
           <button
             onClick={onBack}
@@ -193,12 +192,10 @@ const CourseViewer: React.FC<CourseViewerProps> = ({ course, onBack, onUpdateCou
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          {/* Sidebar */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 sticky top-8">
               <h3 className="font-semibold text-gray-900 mb-4">Course Content</h3>
               
-              {/* Tab Navigation */}
               <div className="space-y-2 mb-6">
                 {tabs.map((tab) => (
                   <button
@@ -216,7 +213,6 @@ const CourseViewer: React.FC<CourseViewerProps> = ({ course, onBack, onUpdateCou
                 ))}
               </div>
 
-              {/* Lessons Navigation */}
               {activeTab === 'lessons' && course.lessons && (
                 <div className="space-y-2">
                   <h4 className="text-sm font-medium text-gray-600 mb-2">Curriculum</h4>
@@ -243,11 +239,9 @@ const CourseViewer: React.FC<CourseViewerProps> = ({ course, onBack, onUpdateCou
                 </div>
               )}
 
-              {/* Notes Navigation */}
               {activeTab === 'notes' && (
                 <div className="space-y-2">
                   <h4 className="text-sm font-medium text-gray-600 mb-2">Sections</h4>
-                  {/* (Old note navigation removed; now handled in main notes UI) */}
                 </div>
               )}
 

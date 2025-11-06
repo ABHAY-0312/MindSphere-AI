@@ -2,6 +2,9 @@ import express from 'express';
 import Course from '../models/Course.js';
 import User from '../models/User.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { generateCourseContent } from '../services/geminiService.js';
+import { getYoutubeVideosForLessons } from '../services/youtubeService.js';
+import { getYoutubeVideosForLessonsNoKey } from '../services/youtubeServiceNoKey.js';
 
 const router = express.Router();
 
@@ -184,15 +187,19 @@ router.get('/', (req, res) => {
 router.post('/:id/enroll', authMiddleware, async (req, res) => {
   try {
     const catalogCourseId = req.params.id;
+    console.log(`\n📚 ENROLL REQUEST for catalog course: ${catalogCourseId}`);
     
     // Find catalog course
     const catalogCourse = catalogCourses.find(c => c.id === catalogCourseId);
     
     if (!catalogCourse) {
+      console.log('❌ Catalog course not found');
       return res.status(404).json({ 
         error: 'Catalog course not found' 
       });
     }
+    
+    console.log(`📖 Found catalog course: ${catalogCourse.title}`);
     
     // Check if user already enrolled
     const existingCourse = await Course.findOne({
@@ -202,36 +209,154 @@ router.post('/:id/enroll', authMiddleware, async (req, res) => {
     });
     
     if (existingCourse) {
+      console.log('⚠️ User already enrolled in this course');
       return res.status(400).json({ 
         error: 'You are already enrolled in this course',
         course: existingCourse
       });
     }
     
-    // Create course from catalog
+    console.log(`\n🤖 Generating content for: ${catalogCourse.title}`);
+    console.log(`📝 Using Gemini to generate lessons, quizzes, notes, and flashcards...`);
+    
+    // Generate course content using Gemini AI
+    const generatedContent = await generateCourseContent(
+      catalogCourse.title,
+      'pdf',
+      catalogCourse.title
+    );
+    
+    console.log(`✅ Generated ${generatedContent.lessons?.length || 0} lessons`);
+    console.log(`✅ Generated ${generatedContent.quizQuestions?.length || 0} quiz questions`);
+    console.log(`✅ Generated ${generatedContent.notes?.length || 0} study notes`);
+    console.log(`✅ Generated ${generatedContent.flashcards?.length || 0} flashcards`);
+    
+    // Build course data with generated content
     const courseData = {
-      ...catalogCourse,
+      title: catalogCourse.title,
+      description: catalogCourse.description,
+      summary: generatedContent.summary || catalogCourse.summary,
       sourceType: 'catalog',
+      source: catalogCourse.title,
+      thumbnail: catalogCourse.thumbnail,
+      category: catalogCourse.category || generatedContent.category,
+      level: catalogCourse.level || generatedContent.level,
+      duration: catalogCourse.duration,
+      rating: catalogCourse.rating,
+      studentsEnrolled: catalogCourse.studentsEnrolled,
+      instructor: catalogCourse.instructor,
+      topics: catalogCourse.topics || generatedContent.topics || [],
+      whatYouLearn: catalogCourse.whatYouLearn || [],
+      requirements: catalogCourse.requirements || [],
+      
+      // Generated content
+      lessons: (generatedContent.lessons || []).map((lesson, index) => ({
+        ...lesson,
+        isCompleted: false,
+        order: lesson.order || index + 1,
+        resources: [],
+        transcript: ''
+      })),
+      notes: (generatedContent.notes || []).map(note => {
+        let summaryArray = [];
+        if (Array.isArray(note.summary)) {
+          summaryArray = note.summary;
+        } else if (typeof note.summary === 'string') {
+          summaryArray = note.summary
+            .split(/[\n•\-]/)
+            .map(s => s.trim())
+            .filter(s => s.length > 0);
+        }
+        return {
+          title: note.title,
+          summary: summaryArray,
+          topics: note.topics || []
+        };
+      }),
+      quizzes: generatedContent.quizQuestions && generatedContent.quizQuestions.length > 0 ? [{
+        title: `${catalogCourse.title} Quiz`,
+        questions: generatedContent.quizQuestions.map(q => {
+          if (q.type === 'multiple-choice') {
+            q.explanations = q.explanations || {};
+            
+            const buildFallback = () => {
+              const correctOpt = q.correctAnswer;
+              return `${correctOpt} is the correct answer because it most accurately addresses the question. This option provides the most relevant and accurate information based on the course material.`;
+            };
+            
+            ['A', 'B', 'C', 'D'].forEach(opt => {
+              if (!q.explanations[opt] || q.explanations[opt].trim().length < 10) {
+                q.explanations[opt] = buildFallback();
+              }
+            });
+            
+            if (!q.correctExplanation || q.correctExplanation.trim().length < 10) {
+              q.correctExplanation = buildFallback();
+            }
+          }
+          if (!q.explanation || q.explanation.trim().length < 10) {
+            q.explanation = `The correct answer is ${q.correctAnswer}.`;
+          }
+          return q;
+        })
+      }] : [],
+      
+      flashcards: (generatedContent.flashcards || []).map(card => ({
+        ...card,
+        reviewCount: 0
+      })),
+      
+      totalLessons: generatedContent.lessons?.length || 0,
+      completedLessons: 0,
+      progress: 0,
+      certificate: catalogCourse.certificate || true,
       user: req.userId,
       lastAccessed: new Date()
     };
     
-    // Remove catalog-specific fields
-    delete courseData.id;
+    console.log(`\n🎬 Fetching YouTube videos for lessons...`);
+    
+    // Fetch YouTube videos for lessons
+    const hasYoutubeKey = !!process.env.YOUTUBE_API_KEY;
+    
+    if (hasYoutubeKey) {
+      console.log('🔑 Using YouTube Data API');
+      courseData.lessons = await getYoutubeVideosForLessons(
+        courseData.lessons,
+        courseData.topics.join(', ')
+      );
+    } else {
+      console.log('🔓 Using Invidious (no API key required)');
+      courseData.lessons = await getYoutubeVideosForLessonsNoKey(
+        courseData.lessons,
+        courseData.topics.join(', ')
+      );
+    }
     
     const course = new Course(courseData);
     await course.save();
     
-    // Add course to user's courses
+    console.log(`\n✅ Catalog course successfully created and saved to database`);
+    console.log(`✅ Course ID: ${course._id}`);
+    
+    // Add course to user's courses AND enrolledCourses (for analytics)
     await User.findByIdAndUpdate(req.userId, {
-      $push: { courses: course._id }
+      $push: { 
+        courses: course._id,
+        enrolledCourses: course._id
+      },
+      lastActivityDate: new Date()
     });
+    
+    console.log(`✅ Course added to user's enrolledCourses`);
+    console.log(`\n🎉 Enrollment complete!\n`);
     
     res.status(201).json(course);
   } catch (error) {
-    console.error('Enroll course error:', error);
+    console.error('❌ Enroll course error:', error);
     res.status(500).json({ 
-      error: 'Failed to enroll in course. Please try again.' 
+      error: 'Failed to enroll in course. Please try again.',
+      details: error.message
     });
   }
 });

@@ -20,13 +20,24 @@ export const removeToken = (): void => {
 // Request options with auth
 const getRequestOptions = (options: RequestInit = {}): RequestInit => {
   const token = getToken();
-  const headers: HeadersInit = {
+  const headers = new Headers({
     'Content-Type': 'application/json',
-    ...options.headers,
-  };
+  });
 
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
+  if (options.headers instanceof Headers) {
+    options.headers.forEach((value, key) => {
+      headers.set(key, value);
+    });
+  } else if (typeof options.headers === 'object' && options.headers) {
+    Object.entries(options.headers).forEach(([key, value]) => {
+      if (typeof value === 'string') {
+        headers.set(key, value);
+      }
+    });
   }
 
   return {

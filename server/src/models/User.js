@@ -24,10 +24,26 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Course'
   }],
+  enrolledCourses: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Course'
+  }],
   subscription: {
     type: String,
     enum: ['free', 'premium'],
     default: 'free'
+  },
+  lastActivityDate: {
+    type: Date,
+    default: Date.now
+  },
+  currentStreak: {
+    type: Number,
+    default: 0
+  },
+  longestStreak: {
+    type: Number,
+    default: 0
   }
 }, {
   timestamps: true

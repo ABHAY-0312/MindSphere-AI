@@ -127,22 +127,16 @@ const QuizComponent: React.FC<QuizComponentProps> = ({ quizzes, onComplete, cour
         { quizIndex: currentQuizIndex, count: 5 }
       );
       
-      console.log('Response data:', data);
-      
       if (data.success) {
-        // Update the quiz with new questions
         if (quizzes[currentQuizIndex]) {
           quizzes[currentQuizIndex].questions.push(...data.newQuestions);
-          console.log('Added new questions. Total questions now:', quizzes[currentQuizIndex].questions.length);
         }
-        // Reset and continue with new questions
         handleRestart();
         alert(`✅ ${data.newQuestions.length} new questions added! Total: ${data.totalQuestions} questions`);
       } else {
         throw new Error(data.error || 'Failed to generate questions');
       }
     } catch (error) {
-      console.error('Error generating more questions:', error);
       const errorMsg = error instanceof Error ? error.message : 'Unknown error occurred';
       alert(`❌ Error: ${errorMsg}`);
     } finally {
@@ -150,26 +144,22 @@ const QuizComponent: React.FC<QuizComponentProps> = ({ quizzes, onComplete, cour
     }
   };
 
-  // For new backend: options are like "A. ...", "B. ..." etc.
   const getSelectedAnswerLetter = (): string => {
     if (!selectedAnswer) return '';
     
-    // If it's already just a letter, return it
     if (/^[A-D]$/.test(selectedAnswer)) {
       return selectedAnswer;
     }
     
-    // If it's "A. text", extract the letter
     const match = selectedAnswer.match(/^([A-D])\./);
     if (match) {
       return match[1];
     }
     
-    // If it's full text without letter prefix, find its position in options
     if (currentQuestion?.options) {
       for (let i = 0; i < currentQuestion.options.length; i++) {
         if (currentQuestion.options[i] === selectedAnswer) {
-          return String.fromCharCode(65 + i); // 65 is 'A' in ASCII
+          return String.fromCharCode(65 + i);
         }
       }
     }
@@ -179,10 +169,9 @@ const QuizComponent: React.FC<QuizComponentProps> = ({ quizzes, onComplete, cour
   const selectedAnswerLetter = getSelectedAnswerLetter();
   const correctAnswerLetter = getCorrectAnswerLetter();
   const isCorrect = selectedAnswerLetter === correctAnswerLetter && selectedAnswerLetter !== '';
-  // Helper to get explanation for selected answer
+  
   const getExplanation = () => {
     if (!currentQuestion) return '';
-    // Always show the correct answer explanation (helps user learn why the correct answer is right)
     if (currentQuestion.correctExplanation) return currentQuestion.correctExplanation;
     return currentQuestion.explanation || '';
   };
@@ -190,26 +179,22 @@ const QuizComponent: React.FC<QuizComponentProps> = ({ quizzes, onComplete, cour
   if (quizCompleted) {
     const totalQuestions = currentQuiz.questions.length;
     
-    // Helper function to extract letter from any answer format
     const extractLetter = (answer: string, options?: string[]): string => {
       if (!answer) return '';
       
-      // If it's already just a letter, return it
       if (/^[A-D]$/.test(answer)) {
         return answer;
       }
       
-      // If it's "A. text", extract the letter
       const match = answer.match(/^([A-D])\./);
       if (match) {
         return match[1];
       }
       
-      // If it's full text, try to find which option it matches
       if (options) {
         for (let i = 0; i < options.length; i++) {
           if (options[i] === answer) {
-            return String.fromCharCode(65 + i); // 65 is 'A' in ASCII
+            return String.fromCharCode(65 + i);
           }
         }
       }
@@ -223,7 +208,6 @@ const QuizComponent: React.FC<QuizComponentProps> = ({ quizzes, onComplete, cour
       const question = currentQuiz.questions[questionIndex];
       if (!question) return false;
       
-      // Extract letters from both answers for comparison
       const storedLetter = extractLetter(storedAnswer, question.options);
       const correctLetter = extractLetter(question.correctAnswer, question.options);
       

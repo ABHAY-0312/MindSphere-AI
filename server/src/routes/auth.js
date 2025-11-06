@@ -93,6 +93,22 @@ router.post('/login', async (req, res) => {
     // Generate token
     const token = generateToken(user._id);
     
+    // MIGRATION: Auto-sync courses to enrolledCourses on login
+    const userDoc = await User.findById(user._id).populate('courses');
+    if (userDoc && userDoc.courses && userDoc.courses.length > 0) {
+      const courseIds = userDoc.courses.map(c => c._id);
+      
+      // Add all courses to enrolledCourses if not already there
+      await User.findByIdAndUpdate(user._id, {
+        $addToSet: { 
+          enrolledCourses: { $each: courseIds }
+        },
+        lastActivityDate: new Date()
+      });
+      
+      console.log(`✅ Migrated ${courseIds.length} courses to enrolledCourses for user ${user.email}`);
+    }
+    
     // Return user and token
     res.json({
       token,
