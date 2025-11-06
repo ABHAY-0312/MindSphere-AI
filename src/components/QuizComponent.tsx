@@ -1,0 +1,378 @@
+import React, { useState } from 'react';
+import { CheckCircle, XCircle, RefreshCw, Award, Brain, Zap } from 'lucide-react';
+import { Quiz } from '../types/course';
+import { api } from '../lib/api';
+
+interface QuizComponentProps {
+  quizzes: Quiz[];
+  onComplete: (score: number) => void;
+  courseId?: string;
+}
+
+const QuizComponent: React.FC<QuizComponentProps> = ({ quizzes, onComplete, courseId }) => {
+  const [currentQuizIndex] = useState(0);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [selectedAnswer, setSelectedAnswer] = useState<string>('');
+  const [showResult, setShowResult] = useState(false);
+  const [answers, setAnswers] = useState<{[key: string]: string}>({});
+  const [quizCompleted, setQuizCompleted] = useState(false);
+  const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
+
+  const currentQuiz = quizzes && quizzes.length > 0 ? quizzes[currentQuizIndex] : null;
+  const currentQuestion = currentQuiz && currentQuiz.questions && currentQuiz.questions.length > 0 ? currentQuiz.questions[currentQuestionIndex] : null;
+
+  // Helper function to get the correct answer letter
+  const getCorrectAnswerLetter = (): string => {
+    if (!currentQuestion) return '';
+    const correctAns = currentQuestion.correctAnswer;
+    
+    // If it's already just a letter, return it
+    if (/^[A-D]$/.test(correctAns)) {
+      return correctAns;
+    }
+    
+    // If it's "A. text", extract the letter
+    const match = correctAns.match(/^([A-D])\./);
+    if (match) {
+      return match[1];
+    }
+    
+    // If it's full text, try to find which option it matches
+    if (currentQuestion.options) {
+      for (let i = 0; i < currentQuestion.options.length; i++) {
+        const option = currentQuestion.options[i];
+        if (option === correctAns || option.replace(/^[A-D]\.\s*/, '') === correctAns) {
+          return String.fromCharCode(65 + i); // 65 is 'A' in ASCII
+        }
+      }
+    }
+    
+    return '';
+  };
+
+  if (!quizzes || quizzes.length === 0 || !currentQuiz) {
+    return (
+      <div className="text-center py-12">
+        <Brain className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+        <h3 className="text-xl font-semibold text-gray-900 mb-2">No Quizzes Available</h3>
+        <p className="text-gray-600">Quizzes will be generated based on your course content.</p>
+      </div>
+    );
+  }
+
+  if (!currentQuestion) {
+    return (
+      <div className="text-center py-12">
+        <Brain className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+        <h3 className="text-xl font-semibold text-gray-900 mb-2">No Questions Available</h3>
+        <p className="text-gray-600">This quiz doesn't have any questions yet.</p>
+      </div>
+    );
+  }
+
+  const handleAnswerSelect = (answer: string) => {
+    setSelectedAnswer(answer);
+  };
+
+  const handleNext = () => {
+    if (selectedAnswer) {
+      const questionId = `${currentQuizIndex}-${currentQuestionIndex}`;
+      setAnswers({ ...answers, [questionId]: selectedAnswer });
+      setShowResult(true);
+    }
+  };
+
+  const handleContinue = () => {
+    setShowResult(false);
+    setSelectedAnswer('');
+
+    if (currentQuestionIndex < currentQuiz.questions.length - 1) {
+      setCurrentQuestionIndex(currentQuestionIndex + 1);
+    } else {
+      // Quiz completed
+      const totalQuestions = currentQuiz.questions.length;
+      const correctAnswers = currentQuiz.questions.filter((q, index) => {
+        const questionId = `${currentQuizIndex}-${index}`;
+        return answers[questionId] === q.correctAnswer || 
+               (index === currentQuestionIndex && selectedAnswer === q.correctAnswer);
+      }).length;
+      
+      const score = Math.round((correctAnswers / totalQuestions) * 100);
+      setQuizCompleted(true);
+      onComplete(score);
+    }
+  };
+
+  const handleRestart = () => {
+    setCurrentQuestionIndex(0);
+    setSelectedAnswer('');
+    setShowResult(false);
+    setAnswers({});
+    setQuizCompleted(false);
+  };
+
+  const handleGenerateMoreQuestions = async () => {
+    if (!courseId) {
+      console.error('Course ID not available');
+      alert('Error: Course ID not found');
+      return;
+    }
+    
+    setIsGeneratingQuestions(true);
+    try {
+      console.log(`Generating more questions for course: ${courseId}, quiz index: ${currentQuizIndex}`);
+      
+      const data = await api.post<{success: boolean; newQuestions: any[]; totalQuestions: number; error?: string}>(
+        `/api/courses/${courseId}/quizzes/generate`,
+        { quizIndex: currentQuizIndex, count: 5 }
+      );
+      
+      console.log('Response data:', data);
+      
+      if (data.success) {
+        // Update the quiz with new questions
+        if (quizzes[currentQuizIndex]) {
+          quizzes[currentQuizIndex].questions.push(...data.newQuestions);
+          console.log('Added new questions. Total questions now:', quizzes[currentQuizIndex].questions.length);
+        }
+        // Reset and continue with new questions
+        handleRestart();
+        alert(`✅ ${data.newQuestions.length} new questions added! Total: ${data.totalQuestions} questions`);
+      } else {
+        throw new Error(data.error || 'Failed to generate questions');
+      }
+    } catch (error) {
+      console.error('Error generating more questions:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error occurred';
+      alert(`❌ Error: ${errorMsg}`);
+    } finally {
+      setIsGeneratingQuestions(false);
+    }
+  };
+
+  // For new backend: options are like "A. ...", "B. ..." etc.
+  const getSelectedAnswerLetter = (): string => {
+    if (!selectedAnswer) return '';
+    
+    // If it's already just a letter, return it
+    if (/^[A-D]$/.test(selectedAnswer)) {
+      return selectedAnswer;
+    }
+    
+    // If it's "A. text", extract the letter
+    const match = selectedAnswer.match(/^([A-D])\./);
+    if (match) {
+      return match[1];
+    }
+    
+    // If it's full text without letter prefix, find its position in options
+    if (currentQuestion?.options) {
+      for (let i = 0; i < currentQuestion.options.length; i++) {
+        if (currentQuestion.options[i] === selectedAnswer) {
+          return String.fromCharCode(65 + i); // 65 is 'A' in ASCII
+        }
+      }
+    }
+    
+    return '';
+  };
+  const selectedAnswerLetter = getSelectedAnswerLetter();
+  const correctAnswerLetter = getCorrectAnswerLetter();
+  const isCorrect = selectedAnswerLetter === correctAnswerLetter && selectedAnswerLetter !== '';
+  // Helper to get explanation for selected answer
+  const getExplanation = () => {
+    if (!currentQuestion) return '';
+    // Always show the correct answer explanation (helps user learn why the correct answer is right)
+    if (currentQuestion.correctExplanation) return currentQuestion.correctExplanation;
+    return currentQuestion.explanation || '';
+  };
+
+  if (quizCompleted) {
+    const totalQuestions = currentQuiz.questions.length;
+    
+    // Helper function to extract letter from any answer format
+    const extractLetter = (answer: string, options?: string[]): string => {
+      if (!answer) return '';
+      
+      // If it's already just a letter, return it
+      if (/^[A-D]$/.test(answer)) {
+        return answer;
+      }
+      
+      // If it's "A. text", extract the letter
+      const match = answer.match(/^([A-D])\./);
+      if (match) {
+        return match[1];
+      }
+      
+      // If it's full text, try to find which option it matches
+      if (options) {
+        for (let i = 0; i < options.length; i++) {
+          if (options[i] === answer) {
+            return String.fromCharCode(65 + i); // 65 is 'A' in ASCII
+          }
+        }
+      }
+      
+      return '';
+    };
+    
+    const correctAnswers = Object.keys(answers).filter(questionId => {
+      const questionIndex = parseInt(questionId.split('-')[1]);
+      const storedAnswer = answers[questionId];
+      const question = currentQuiz.questions[questionIndex];
+      if (!question) return false;
+      
+      // Extract letters from both answers for comparison
+      const storedLetter = extractLetter(storedAnswer, question.options);
+      const correctLetter = extractLetter(question.correctAnswer, question.options);
+      
+      return storedLetter === correctLetter && storedLetter !== '';
+    }).length + (isCorrect ? 1 : 0);
+    
+    const score = Math.round((correctAnswers / totalQuestions) * 100);
+
+    return (
+      <div className="text-center py-12">
+        <div className="mb-8">
+          <Award className="h-16 w-16 text-yellow-500 mx-auto mb-4" />
+          <h3 className="text-2xl font-bold text-gray-900 mb-2">Quiz Completed!</h3>
+          <p className="text-gray-600 mb-6">You've finished the {currentQuiz.title}</p>
+          
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-2xl p-6 max-w-sm mx-auto">
+            <div className="text-4xl font-bold text-gray-900 mb-2">{score}%</div>
+            <div className="text-gray-600">
+              {correctAnswers} out of {totalQuestions} correct
+            </div>
+          </div>
+        </div>
+        
+        <div className="flex gap-4 justify-center mt-8">
+          <button
+            onClick={handleRestart}
+            className="flex items-center space-x-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
+            disabled={isGeneratingQuestions}
+          >
+            <RefreshCw className="h-4 w-4" />
+            <span>Retake Quiz</span>
+          </button>
+          <button
+            onClick={handleGenerateMoreQuestions}
+            className="flex items-center space-x-2 bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={isGeneratingQuestions}
+          >
+            <Zap className="h-4 w-4" />
+            <span>{isGeneratingQuestions ? 'Generating...' : 'Generate More Questions'}</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-2xl font-bold text-gray-900">{currentQuiz.title}</h2>
+          <span className="text-sm text-gray-500">
+            Question {currentQuestionIndex + 1} of {currentQuiz.questions.length}
+          </span>
+        </div>
+        
+        <div className="w-full bg-gray-200 rounded-full h-2">
+          <div 
+            className="bg-blue-600 h-2 rounded-full transition-all"
+            style={{ width: `${((currentQuestionIndex + 1) / currentQuiz.questions.length) * 100}%` }}
+          ></div>
+        </div>
+      </div>
+
+      {!showResult ? (
+        <div>
+          <div className="mb-8">
+            <h3 className="text-xl font-semibold text-gray-900 mb-6">
+              {currentQuestion?.question}
+            </h3>
+            
+            <div className="space-y-3">
+              {currentQuestion?.options?.map((option, index) => (
+                <button
+                  key={index}
+                  onClick={() => handleAnswerSelect(option)}
+                  className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
+                    selectedAnswer === option
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-gray-200 hover:border-gray-300 bg-white'
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className={`w-4 h-4 rounded-full border-2 ${
+                      selectedAnswer === option
+                        ? 'border-blue-500 bg-blue-500'
+                        : 'border-gray-300'
+                    }`}>
+                      {selectedAnswer === option && (
+                        <div className="w-full h-full bg-white rounded-full scale-50"></div>
+                      )}
+                    </div>
+                    <span className="text-gray-900">{option}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              onClick={handleNext}
+              disabled={!selectedAnswer}
+              className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+            >
+              Submit Answer
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="text-center py-8">
+          <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full mb-6 ${
+            isCorrect ? 'bg-green-100' : 'bg-red-100'
+          }`}>
+            {isCorrect ? (
+              <CheckCircle className="h-8 w-8 text-green-600" />
+            ) : (
+              <XCircle className="h-8 w-8 text-red-600" />
+            )}
+          </div>
+          
+          <h3 className={`text-2xl font-bold mb-4 ${
+            isCorrect ? 'text-green-600' : 'text-red-600'
+          }`}>
+            {isCorrect ? 'Correct!' : 'Incorrect'}
+          </h3>
+          
+          <div className={`p-6 rounded-lg mb-6 ${
+            isCorrect ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
+          }`}>
+            <p className="text-gray-700">
+              <strong>Explanation:</strong> {getExplanation()}
+            </p>
+            {!isCorrect && (
+              <p className="mt-2 text-gray-700">
+                <strong>Correct answer:</strong> {currentQuestion?.correctAnswer}
+              </p>
+            )}
+          </div>
+          
+          <button
+            onClick={handleContinue}
+            className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            {currentQuestionIndex < currentQuiz.questions.length - 1 ? 'Next Question' : 'Complete Quiz'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default QuizComponent;
